@@ -20,10 +20,10 @@ package org.apache.flink.runtime.rpc.taskexecutor;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalListener;
 import org.apache.flink.runtime.rpc.RpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcMethod;
 import org.apache.flink.runtime.rpc.RpcService;
+import org.apache.flink.runtime.rpc.resourcemanager.ResourceManagerLeaderListener;
 
 import java.util.UUID;
 
@@ -74,7 +74,7 @@ public class TaskExecutor extends RpcEndpoint<TaskExecutorGateway> {
 	public void start() {
 		// start by connecting to the ResourceManager
 		try {
-			haServices.getResourceManagerLeaderRetriever().start(new ResourceManagerLeaderListener());
+			haServices.getResourceManagerLeaderRetriever().start(new ResourceManagerLeaderListener(this));
 		} catch (Exception e) {
 			onFatalErrorAsync(e);
 		}
@@ -121,49 +121,14 @@ public class TaskExecutor extends RpcEndpoint<TaskExecutorGateway> {
 
 	/**
 	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
-	 * This method should be used when asynchronous threads want to notify the
-	 * TaskExecutor of a fatal error.
-	 * 
-	 * @param t The exception describing the fatal error
-	 */
-	void onFatalErrorAsync(final Throwable t) {
-		runAsync(new Runnable() {
-			@Override
-			public void run() {
-				onFatalError(t);
-			}
-		});
-	}
-
-	/**
-	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
 	 * This method must only be called from within the TaskExecutor's main thread.
 	 * 
 	 * @param t The exception describing the fatal error
 	 */
-	void onFatalError(Throwable t) {
+	public void onFatalError(Throwable t) {
 		// to be determined, probably delegate to a fatal error handler that 
 		// would either log (mini cluster) ot kill the process (yarn, mesos, ...)
 		log.error("FATAL ERROR", t);
 	}
 
-	// ------------------------------------------------------------------------
-	//  Utility classes
-	// ------------------------------------------------------------------------
-
-	/**
-	 * The listener for leader changes of the resource manager
-	 */
-	private class ResourceManagerLeaderListener implements LeaderRetrievalListener {
-
-		@Override
-		public void notifyLeaderAddress(String leaderAddress, UUID leaderSessionID) {
-			getSelf().notifyOfNewResourceManagerLeader(leaderAddress, leaderSessionID);
-		}
-
-		@Override
-		public void handleError(Exception exception) {
-			onFatalErrorAsync(exception);
-		}
-	}
 }

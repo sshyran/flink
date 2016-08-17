@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.rpc.resourcemanager;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.rpc.RpcGateway;
 import org.apache.flink.runtime.rpc.RpcTimeout;
@@ -73,5 +74,20 @@ public interface ResourceManagerGateway extends RpcGateway {
 			UUID resourceManagerLeaderId,
 			String taskExecutorAddress,
 			ResourceID resourceID,
+			@RpcTimeout FiniteDuration timeout);
+
+	/**
+	 *
+	 * @param leaderId           The fencing token for the ResourceManager leader
+	 * @param jobMasterAddress   The address of the JobMaster that registers
+	 * @param jobId              The jobID of the JobMaster that registers
+	 * @param timeout            The timeout for the response
+	 *
+	 * @return The future to the response by the ResourceManager.
+	 */
+	Future<org.apache.flink.runtime.rpc.registration.RegistrationResponse> registerJobMaster(
+			UUID leaderId,
+			String jobMasterAddress,
+			JobID jobId,
 			@RpcTimeout FiniteDuration timeout);
 }

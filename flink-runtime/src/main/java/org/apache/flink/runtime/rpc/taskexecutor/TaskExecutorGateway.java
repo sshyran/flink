@@ -19,17 +19,13 @@
 package org.apache.flink.runtime.rpc.taskexecutor;
 
 import org.apache.flink.runtime.rpc.RpcGateway;
+import org.apache.flink.runtime.rpc.resourcemanager.ResourceManagerLeaderListener;
 
 import java.util.UUID;
 
 /**
  * {@link TaskExecutor} RPC gateway interface
  */
-public interface TaskExecutorGateway extends RpcGateway {
+public interface TaskExecutorGateway extends RpcGateway, ResourceManagerLeaderListener.CallBack {
 
-	// ------------------------------------------------------------------------
-	//  ResourceManager handlers
-	// ------------------------------------------------------------------------
-
-	void notifyOfNewResourceManagerLeader(String address, UUID resourceManagerLeaderId);
 }

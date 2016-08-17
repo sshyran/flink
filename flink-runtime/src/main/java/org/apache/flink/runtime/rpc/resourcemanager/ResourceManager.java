@@ -20,6 +20,7 @@ package org.apache.flink.runtime.rpc.resourcemanager;
 
 import akka.dispatch.Mapper;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.rpc.RpcMethod;
@@ -27,6 +28,7 @@ import org.apache.flink.runtime.rpc.RpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.jobmaster.JobMaster;
 import org.apache.flink.runtime.rpc.jobmaster.JobMasterGateway;
+import org.apache.flink.runtime.rpc.jobmaster.JobMasterToResourceManagerConnection;
 import org.apache.flink.runtime.rpc.taskexecutor.TaskExecutorRegistrationSuccess;
 import org.apache.flink.util.Preconditions;
 
@@ -115,5 +117,22 @@ public class ResourceManager extends RpcEndpoint<ResourceManagerGateway> {
 			ResourceID resourceID) {
 
 		return new TaskExecutorRegistrationSuccess(new InstanceID(), 5000);
+	}
+
+	/**
+	 *
+	 * @param leaderId           The fencing token for the ResourceManager leader
+	 * @param jobMasterAddress   The address of the JobMaster that registers
+	 * @param jobId              The jobID of the JobMaster that registers
+	 *
+	 * @return The response by the ResourceManager.
+	 */
+	@RpcMethod
+	public org.apache.flink.runtime.rpc.registration.RegistrationResponse registerJobMaster(
+		UUID leaderId,
+		String jobMasterAddress,
+		JobID jobId) {
+
+		return new JobMasterToResourceManagerConnection.RegistrationSuccessResponse(100L);
 	}
 }

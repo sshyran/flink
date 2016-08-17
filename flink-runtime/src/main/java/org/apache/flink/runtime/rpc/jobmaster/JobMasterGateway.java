@@ -20,13 +20,14 @@ package org.apache.flink.runtime.rpc.jobmaster;
 
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rpc.RpcGateway;
+import org.apache.flink.runtime.rpc.resourcemanager.ResourceManagerLeaderListener;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import scala.concurrent.Future;
 
 /**
  * {@link JobMaster} rpc gateway interface
  */
-public interface JobMasterGateway extends RpcGateway {
+public interface JobMasterGateway extends RpcGateway, ResourceManagerLeaderListener.CallBack {
 
 	/**
 	 * Updates the task execution state for a given task.
@@ -36,10 +37,4 @@ public interface JobMasterGateway extends RpcGateway {
 	 */
 	Future<Acknowledge> updateTaskExecutionState(TaskExecutionState taskExecutionState);
 
-	/**
-	 * Triggers the registration of the job master at the resource manager.
-	 *
-	 * @param address Address of the resource manager
-	 */
-	void registerAtResourceManager(final String address);
 }
