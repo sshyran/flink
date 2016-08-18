@@ -72,8 +72,6 @@ public class JobMasterTest {
 		}
 
 		assertFalse(deadline.isOverdue());
-		jobMaster.getResourceManager();
-		assertEquals(resourceManager.getAddress(), akkaRpcService2.getAddress(jobMaster.getResourceManager()));
 		jobMaster.shutDown();
 		resourceManager.shutDown();
 	}

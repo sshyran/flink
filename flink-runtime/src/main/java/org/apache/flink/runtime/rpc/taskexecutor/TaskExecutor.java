@@ -125,6 +125,7 @@ public class TaskExecutor extends RpcEndpoint<TaskExecutorGateway> {
 	 * 
 	 * @param t The exception describing the fatal error
 	 */
+	@Override
 	public void onFatalError(Throwable t) {
 		// to be determined, probably delegate to a fatal error handler that 
 		// would either log (mini cluster) ot kill the process (yarn, mesos, ...)
