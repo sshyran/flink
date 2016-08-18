@@ -76,16 +76,20 @@ public class JobMaster extends RpcEndpoint<JobMasterGateway> {
 	@Override
 	public void start() {
 		super.start();
+		startLeaderElection();
+		registerAtResourceManager();
+	}
+
+	private void startLeaderElection() {
+
+	}
+
+	private void registerAtResourceManager() {
 		try {
 			haServices.getResourceManagerLeaderRetriever().start(new ResourceManagerLeaderListener(this));
 		} catch (Exception e) {
 			onFatalError(e);
 		}
-
-		startLeaderElection();
-	}
-
-	private void startLeaderElection() {
 
 	}
 
@@ -103,6 +107,16 @@ public class JobMaster extends RpcEndpoint<JobMasterGateway> {
 		this.resourceManagerAddress = leaderAddress;
 		this.resourceManagerLeaderUUID = leaderSessionID;
 		resetResourceManagerConnection();
+	}
+
+	/**
+	 * Handler resource manager listener error message
+	 * @param cause The Exception causes the error
+	 */
+	@RpcMethod
+	public void notifyResourceManagerListenerError(Throwable cause) {
+		//TODO: Maybe need to poison the job master or restart a leader retrieval service.
+		onFatalError(cause);
 	}
 
 	//----------------------------------------------------------------------------------------------
@@ -152,6 +166,39 @@ public class JobMaster extends RpcEndpoint<JobMasterGateway> {
 	//----------------------------------------------------------------------------------------------
 	// Helper methods
 	//----------------------------------------------------------------------------------------------
+
+
+	// ------------------------------------------------------------------------
+	//  Error handling
+	// ------------------------------------------------------------------------
+
+	/**
+	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
+	 * This method should be used when asynchronous threads want to notify the
+	 * Endpoint of a fatal error.
+	 *
+	 * @param t The exception describing the fatal error
+	 */
+	protected void onFatalErrorAsync(final Throwable t) {
+		runAsync(new Runnable() {
+			@Override
+			public void run() {
+				onFatalError(t);
+			}
+		});
+	}
+
+	/**
+	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
+	 * This method must only be called from within the TaskExecutor's main thread.
+	 *
+	 * @param t The exception describing the fatal error
+	 */
+	protected void onFatalError(Throwable t) {
+		// to be determined, probably delegate to a fatal error handler that
+		// would either log (mini cluster) ot kill the process (yarn, mesos, ...)
+		log.error("FATAL ERROR", t);
+	}
 
 	/**
 	 * Return JobID of the job running in JobMaster

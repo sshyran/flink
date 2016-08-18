@@ -115,9 +115,35 @@ public class TaskExecutor extends RpcEndpoint<TaskExecutorGateway> {
 		}
 	}
 
+	/**
+	 * Handler resource manager listener error message
+	 * @param cause The Exception causes the error
+	 */
+	@RpcMethod
+	public void notifyResourceManagerListenerError(Throwable cause) {
+		//TODO: Maybe need to poison the task executor or restart a leader retrieval service.
+		onFatalErrorAsync(cause);
+	}
+
 	// ------------------------------------------------------------------------
 	//  Error handling
 	// ------------------------------------------------------------------------
+
+	/**
+	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
+	 * This method should be used when asynchronous threads want to notify the
+	 * Endpoint of a fatal error.
+	 *
+	 * @param t The exception describing the fatal error
+	 */
+	protected void onFatalErrorAsync(final Throwable t) {
+		runAsync(new Runnable() {
+			@Override
+			public void run() {
+				onFatalError(t);
+			}
+		});
+	}
 
 	/**
 	 * Notifies the TaskExecutor that a fatal error has occurred and it cannot proceed.
@@ -125,8 +151,7 @@ public class TaskExecutor extends RpcEndpoint<TaskExecutorGateway> {
 	 * 
 	 * @param t The exception describing the fatal error
 	 */
-	@Override
-	public void onFatalError(Throwable t) {
+	protected void onFatalError(Throwable t) {
 		// to be determined, probably delegate to a fatal error handler that 
 		// would either log (mini cluster) ot kill the process (yarn, mesos, ...)
 		log.error("FATAL ERROR", t);

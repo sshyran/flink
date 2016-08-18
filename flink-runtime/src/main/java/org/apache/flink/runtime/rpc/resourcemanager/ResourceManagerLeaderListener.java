@@ -53,7 +53,7 @@ public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends Resou
 	 */
 	@Override
 	public void handleError(Exception exception) {
-		endpoint.onFatalErrorAsync(exception);
+		endpoint.getSelf().notifyResourceManagerListenerError(exception);
 	}
 
 	/**
@@ -61,5 +61,6 @@ public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends Resou
 	 */
 	public interface CallBack extends RpcGateway {
 		void notifyOfNewResourceManagerLeader(String leaderAddress, UUID leaderSessionID);
+		void notifyResourceManagerListenerError(Throwable casue);
 	}
 }

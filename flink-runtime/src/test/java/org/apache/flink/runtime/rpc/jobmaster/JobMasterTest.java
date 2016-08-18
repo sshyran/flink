@@ -49,19 +49,17 @@ public class JobMasterTest {
 		ExecutorService executorService = new ForkJoinPool();
 
 		ResourceManager resourceManager = new ResourceManager(akkaRpcService, executorService);
+		resourceManager.start();
+
 		JobGraph mockJob= Mockito.mock(JobGraph.class);
+		Mockito.doReturn(new JobID()).when(mockJob).getJobID();
 		HighAvailabilityServices haServices = new NonHaServices(resourceManager.getAddress());
 		JobMaster jobMaster = new JobMaster(
 			mockJob,
 			haServices,
 			akkaRpcService2,
 			executorService);
-
-		resourceManager.start();
 		jobMaster.start();
-		jobMaster.getSelf().notifyOfNewResourceManagerLeader(resourceManager.getAddress(), UUID.randomUUID());
-		Mockito.doReturn(new JobID()).when(mockJob).getJobID();
-		jobMaster.resetResourceManagerConnection();
 
 		// wait for successful registration
 		FiniteDuration timeout = new FiniteDuration(200, TimeUnit.SECONDS);
@@ -72,6 +70,8 @@ public class JobMasterTest {
 		}
 
 		assertFalse(deadline.isOverdue());
+		JobMasterToResourceManagerConnection rmConnection = Whitebox.getInternalState(jobMaster, "rmConnection");
+		assertEquals(resourceManager.getAddress(), rmConnection.getResourceManagerAddress());
 		jobMaster.shutDown();
 		resourceManager.shutDown();
 	}
