@@ -25,10 +25,13 @@ import java.util.UUID;
 
 /**
  * {@link ResourceManagerLeaderListener} is responsible to react when the leader of resource manager has been changed.
- * @param <T>
+ * it will transfer the callback message to a rpc call on a {@link RpcGateway} implementing {@link CallBack}
+ *
+ * @param <T> a listener Endpoint acting as the listener of the leadership
  */
 public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends ResourceManagerLeaderListener.CallBack>>
-	implements LeaderRetrievalListener {
+	implements LeaderRetrievalListener
+{
 
 	/** RpcEndpoint that implements the {@link CallBack} interface */
 	private T endpoint;
@@ -39,7 +42,8 @@ public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends Resou
 
 	/**
 	 * Notification for new leader availability
-	 * @param leaderAddress The address of the new leader
+	 *
+	 * @param leaderAddress   The address of the new leader
 	 * @param leaderSessionID The new leader session ID
 	 */
 	@Override
@@ -49,6 +53,7 @@ public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends Resou
 
 	/**
 	 * Handle errors on ResourceManager leader retrieval service, which will trigger async error handling of endpoint
+	 *
 	 * @param exception
 	 */
 	@Override
@@ -60,7 +65,19 @@ public class ResourceManagerLeaderListener<T extends RpcEndpoint<? extends Resou
 	 * a {@link RpcGateway} definition that concerns leader changes of ResourceManager.
 	 */
 	public interface CallBack extends RpcGateway {
+		/**
+		 * Callback interface used to notify a rpcGateway that the leader of resource manager has changed
+		 *
+		 * @param leaderAddress   the address of new leader, null if no leader at present
+		 * @param leaderSessionID the leader session id of the new leader, null if no leader at present
+		 */
 		void notifyOfNewResourceManagerLeader(String leaderAddress, UUID leaderSessionID);
-		void notifyResourceManagerListenerError(Throwable casue);
+
+		/**
+		 * Callback interface used to notify error of resource manager retrieval service
+		 *
+		 * @param cause the cause of the error
+		 */
+		void notifyResourceManagerListenerError(Throwable cause);
 	}
 }

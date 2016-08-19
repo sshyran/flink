@@ -28,7 +28,6 @@ import org.apache.flink.runtime.rpc.RpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.jobmaster.JobMaster;
 import org.apache.flink.runtime.rpc.jobmaster.JobMasterGateway;
-import org.apache.flink.runtime.rpc.jobmaster.JobMasterToResourceManagerConnection;
 import org.apache.flink.runtime.rpc.taskexecutor.TaskExecutorRegistrationSuccess;
 import org.apache.flink.util.Preconditions;
 
@@ -133,6 +132,6 @@ public class ResourceManager extends RpcEndpoint<ResourceManagerGateway> {
 		String jobMasterAddress,
 		JobID jobId) {
 
-		return new JobMasterToResourceManagerConnection.RegistrationSuccessResponse(100L);
+		return new org.apache.flink.runtime.rpc.registration.RegistrationResponse.Success();
 	}
 }

@@ -28,6 +28,7 @@ import org.apache.flink.runtime.rpc.registration.RetryingRegistration;
 import org.apache.flink.runtime.rpc.resourcemanager.ResourceManagerGateway;
 import org.slf4j.Logger;
 import scala.concurrent.Future;
+import scala.concurrent.Promise;
 import scala.concurrent.duration.FiniteDuration;
 
 import java.util.UUID;
@@ -36,6 +37,10 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
 
+/**
+ * {@link JobMasterToResourceManagerConnection} is responsible to maintain rpc gateway of resource manager for
+ * JobMaster, including
+ */
 public class JobMasterToResourceManagerConnection {
 
 	/** the logger for all log messages of this class */
@@ -50,24 +55,24 @@ public class JobMasterToResourceManagerConnection {
 
 	private ResourceManagerRegistration pendingRegistration;
 
+	private Promise<ResourceManagerGateway> resourceManagerGatewayPromise;
 	private ResourceManagerGateway registeredResourceManager;
 
 	/** flag indicating that the connection is closed */
 	private volatile boolean closed;
 
-	/** messages return from resource manager when registered */
-	private volatile long heartbeatInterval;
-
 	public JobMasterToResourceManagerConnection(
-			Logger log,
-			JobMaster jobMaster,
-			String resourceManagerAddress,
-			UUID resourceManagerLeaderId) {
+		Logger log,
+		JobMaster jobMaster,
+		String resourceManagerAddress,
+		UUID resourceManagerLeaderId)
+	{
 
 		this.log = checkNotNull(log);
 		this.jobMaster = checkNotNull(jobMaster);
 		this.resourceManagerAddress = checkNotNull(resourceManagerAddress);
 		this.resourceManagerLeaderId = checkNotNull(resourceManagerLeaderId);
+		this.resourceManagerGatewayPromise = new scala.concurrent.impl.Promise.DefaultPromise<>();
 	}
 
 	// ------------------------------------------------------------------------
@@ -80,21 +85,21 @@ public class JobMasterToResourceManagerConnection {
 		checkState(!isRegistered() && pendingRegistration == null, "The connection is already started");
 
 		ResourceManagerRegistration registration = new ResourceManagerRegistration(
-				log, jobMaster.getRpcService(),
-				resourceManagerAddress, resourceManagerLeaderId,
-				jobMaster.getAddress(), jobMaster.getJobId());
+			log, jobMaster.getRpcService(),
+			resourceManagerAddress, resourceManagerLeaderId,
+			jobMaster.getAddress(), jobMaster.getJobId());
 		registration.startRegistration();
 
-		Future<Tuple2<ResourceManagerGateway, RegistrationSuccessResponse>> future = registration.getFuture();
-		
-		future.onSuccess(new OnSuccess<Tuple2<ResourceManagerGateway, RegistrationSuccessResponse>>() {
+		Future<Tuple2<ResourceManagerGateway, RegistrationResponse.Success>> future = registration.getFuture();
+
+		future.onSuccess(new OnSuccess<Tuple2<ResourceManagerGateway, RegistrationResponse.Success>>() {
 			@Override
-			public void onSuccess(Tuple2<ResourceManagerGateway, RegistrationSuccessResponse> result) {
+			public void onSuccess(Tuple2<ResourceManagerGateway, RegistrationResponse.Success> result) {
 				registeredResourceManager = result.f0;
-				heartbeatInterval = result.f1.heartbeatInterval;
+				resourceManagerGatewayPromise.success(registeredResourceManager);
 			}
 		}, jobMaster.getMainThreadExecutionContext());
-		
+
 		// this future should only ever fail if there is a bug, not if the registration is declined
 		future.onFailure(new OnFailure() {
 			@Override
@@ -104,6 +109,9 @@ public class JobMasterToResourceManagerConnection {
 		}, jobMaster.getMainThreadExecutionContext());
 	}
 
+	/**
+	 * Close the connection to resource manager
+	 */
 	public void close() {
 		closed = true;
 
@@ -111,8 +119,21 @@ public class JobMasterToResourceManagerConnection {
 		if (pendingRegistration != null) {
 			pendingRegistration.cancel();
 		}
+
+		// reset the registered gateway
+		registeredResourceManager = null;
+
+		// fail the promise of gateway
+		if(resourceManagerGatewayPromise.isCompleted()) {
+			resourceManagerGatewayPromise = new scala.concurrent.impl.Promise.DefaultPromise<>();
+		}
+		resourceManagerGatewayPromise.failure(new IllegalStateException("Connection closed"));
 	}
 
+	/**
+	 * Check whether the connection is closed or not
+	 * @return
+	 */
 	public boolean isClosed() {
 		return closed;
 	}
@@ -121,34 +142,56 @@ public class JobMasterToResourceManagerConnection {
 	//  Properties
 	// ------------------------------------------------------------------------
 
+	/**
+	 * Gets the leader session id of the resource manager
+	 * @return
+	 */
 	public UUID getResourceManagerLeaderId() {
 		return resourceManagerLeaderId;
 	}
 
+	/**
+	 * Gets the address of ResourceManagerGateway trying to connect.
+	 *
+	 * @return
+	 */
 	public String getResourceManagerAddress() {
 		return resourceManagerAddress;
 	}
 
 	/**
 	 * Gets the ResourceManagerGateway. This returns null until the registration is completed.
+	 *
+	 * @return
 	 */
 	public ResourceManagerGateway getResourceManager() {
 		return registeredResourceManager;
 	}
 
+	/**
+	 * Gets the future of ResourceManagerGateway. This return a future of resource manager gateway
+	 * which will be complete when job master succeeds in registering to resource manager
+	 *
+	 * @return Future of that registered ResourceManagerGateway
+	 */
+	public Future<ResourceManagerGateway> getResourceManagerFuture() {
+		return resourceManagerGatewayPromise.future();
+	}
+
+	/**
+	 * Checks whether the job master is registered to resource master or not
+	 * @return True for registered and fale for not
+	 */
 	public boolean isRegistered() {
 		return registeredResourceManager != null;
 	}
 
-	public long getHeartbeatInterval() {
-		return heartbeatInterval;
-	}
 	// ------------------------------------------------------------------------
 
 	@Override
 	public String toString() {
 		return String.format("Connection to ResourceManager %s (leaderId=%s)",
-				resourceManagerAddress, resourceManagerLeaderId); 
+			resourceManagerAddress, resourceManagerLeaderId);
 	}
 
 	// ------------------------------------------------------------------------
@@ -159,19 +202,21 @@ public class JobMasterToResourceManagerConnection {
 	 * {@link RetryingRegistration} implementation that trigger JobMaster register RPC call
 	 */
 	static class ResourceManagerRegistration
-			extends RetryingRegistration<ResourceManagerGateway, RegistrationSuccessResponse> {
+		extends RetryingRegistration<ResourceManagerGateway, RegistrationResponse.Success>
+	{
 
 		private final String jobMasterAddress;
-		
+
 		private final JobID jobID;
 
 		public ResourceManagerRegistration(
-				Logger log,
-				RpcService rpcService,
-				String targetAddress,
-				UUID leaderId,
-				String jobMasterAddress,
-				JobID jobID) {
+			Logger log,
+			RpcService rpcService,
+			String targetAddress,
+			UUID leaderId,
+			String jobMasterAddress,
+			JobID jobID)
+		{
 
 			super(log, rpcService, "ResourceManager", ResourceManagerGateway.class, targetAddress, leaderId);
 			this.jobMasterAddress = checkNotNull(jobMasterAddress);
@@ -180,22 +225,12 @@ public class JobMasterToResourceManagerConnection {
 
 		@Override
 		protected Future<RegistrationResponse> invokeRegistration(
-				ResourceManagerGateway resourceManager, UUID leaderId, long timeoutMillis) throws Exception {
+			ResourceManagerGateway resourceManager, UUID leaderId, long timeoutMillis) throws Exception
+		{
 
 			FiniteDuration timeout = new FiniteDuration(timeoutMillis, TimeUnit.MILLISECONDS);
-
 			return resourceManager.registerJobMaster(leaderId, jobMasterAddress, jobID, timeout);
 		}
 	}
 
-	/**
-	 * ResourceManager response message when a JobMaster succeeds in registering.
-	 */
-	public static class RegistrationSuccessResponse extends RegistrationResponse.Success {
-		private final long heartbeatInterval;
-
-		public RegistrationSuccessResponse(long heartbeatInterval) {
-			this.heartbeatInterval = heartbeatInterval;
-		}
-	}
 }

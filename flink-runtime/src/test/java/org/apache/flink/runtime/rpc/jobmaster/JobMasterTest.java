@@ -27,7 +27,7 @@ public class JobMasterTest {
 	// ------------------------------------------------------------------------
 	//  shared test members
 	// ------------------------------------------------------------------------
-	// TODO user mocked rpc service instead of AkkaRPcService
+	// TODO use mock rpc service instead of AkkaRPcService
 	private static ActorSystem actorSystem = AkkaUtils.createDefaultActorSystem();
 
 	private static AkkaRpcService akkaRpcService =
