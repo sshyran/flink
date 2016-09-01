@@ -22,10 +22,19 @@ import akka.actor.ActorSystem;
 import akka.util.Timeout;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.akka.AkkaUtils;
+import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
+import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
+import org.apache.flink.runtime.resourcemanager.ResourceManager;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Test;
+
+import scala.concurrent.Await;
+import scala.concurrent.Future;
+import scala.concurrent.duration.FiniteDuration;
 
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +49,7 @@ public class AkkaRpcServiceTest extends TestLogger {
 	private static ActorSystem actorSystem = AkkaUtils.createDefaultActorSystem();
 
 	private static AkkaRpcService akkaRpcService =
-			new AkkaRpcService(actorSystem, new Timeout(10000, TimeUnit.MILLISECONDS));
+		new AkkaRpcService(actorSystem, new Timeout(10000, TimeUnit.MILLISECONDS));
 
 	@AfterClass
 	public static void shutdown() {
@@ -70,4 +79,49 @@ public class AkkaRpcServiceTest extends TestLogger {
 
 		assertTrue("call was not properly delayed", ((stop - start) / 1000000) >= delay);
 	}
+
+	/**
+	 * Test connect method
+	 * 1. Get the same result when connect the same address and same gateway class
+	 * @throws Exception
+	 */
+	@Test
+	public void testConnect() throws Exception {
+		TestingLeaderElectionService leaderElectionService = new TestingLeaderElectionService();
+		TestingHighAvailabilityServices highAvailabilityServices = new TestingHighAvailabilityServices();
+		highAvailabilityServices.setResourceManagerLeaderElectionService(leaderElectionService);
+
+		ResourceManager rm = new ResourceManager(akkaRpcService, highAvailabilityServices);
+		rm.start();
+		String address = rm.getAddress();
+		// verify get the same result when connect the same address and same gateway class
+		Future<ResourceManagerGateway> rmGatewayFuture1 = akkaRpcService.connect(address, ResourceManagerGateway.class);
+		ResourceManagerGateway rmGateway1 = Await.result(rmGatewayFuture1, new FiniteDuration(200, TimeUnit.MILLISECONDS));
+
+		Future<ResourceManagerGateway> rmGatewayFuture2 = akkaRpcService.connect(address, ResourceManagerGateway.class);
+		ResourceManagerGateway rmGateway2 = Await.result(rmGatewayFuture2, new FiniteDuration(200, TimeUnit.MILLISECONDS));
+
+		Assert.assertEquals(rmGateway1, rmGateway2);
+		Assert.assertEquals(rmGateway1.hashCode(), rmGateway2.hashCode());
+	}
+
+	/**
+	 * Test connect method
+	 * 1. Failed when connect to invalid address
+	 * @throws Exception
+	 */
+	@Test(expected = RuntimeException.class)
+	public void testConnectInvalidAddress() throws Exception {
+		TestingLeaderElectionService leaderElectionService = new TestingLeaderElectionService();
+		TestingHighAvailabilityServices highAvailabilityServices = new TestingHighAvailabilityServices();
+		highAvailabilityServices.setResourceManagerLeaderElectionService(leaderElectionService);
+
+		ResourceManager rm = new ResourceManager(akkaRpcService, highAvailabilityServices);
+		rm.start();
+		// verify failed when connect to invalid address
+		String invalidString = rm.getAddress() + "abc";
+		Future<ResourceManagerGateway> invalidRmGatewayFuture = akkaRpcService.connect(invalidString, ResourceManagerGateway.class);
+		Await.result(invalidRmGatewayFuture, new FiniteDuration(200, TimeUnit.MILLISECONDS));
+	}
+
 }
