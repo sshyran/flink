@@ -40,6 +40,15 @@ public interface HighAvailabilityServices {
 	LeaderRetrievalService getResourceManagerLeaderRetriever() throws Exception;
 
 	/**
+	 * Gets the leader retriever for the given job JobMaster
+	 *
+	 * @param jobID The identifier of the job running the election.
+	 * @return
+	 * @throws Exception
+	 */
+	LeaderRetrievalService getJobMasterLeaderRetriever(JobID jobID) throws Exception;
+
+	/**
 	 * Gets the leader election service for the cluster's resource manager.
 	 * @return
 	 * @throws Exception
